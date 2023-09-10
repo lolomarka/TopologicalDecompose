@@ -1,9 +1,11 @@
 ﻿using System.Collections.Immutable;
+using System.IO;
 
 internal class Program
 {
     private static void Main(string[] args)
     {
+        var g = ReadGraphFromFile("input.txt");   
         var graph = new Graph(new int[] { 1, 4, 2, 3, 5, 6 }, 
             new Edge[] { 
                 new Edge(1, 4),
@@ -17,6 +19,11 @@ internal class Program
             });
         var a = graph.TopologicalDecompose();
         a.Print();
+    }
+
+    private static Graph ReadGraphFromFile(string path)
+    {
+        
     }
 }
 
