@@ -5,25 +5,30 @@ internal class Program
 {
     private static void Main(string[] args)
     {
-        var g = ReadGraphFromFile("input.txt");   
-        var graph = new Graph(new int[] { 1, 4, 2, 3, 5, 6 }, 
-            new Edge[] { 
-                new Edge(1, 4),
-                new Edge(4,1),
-                new Edge(1,2),
-                new Edge(4,3),
-                new Edge(3,2),
-                new Edge(2,5),
-                new Edge(5,3),
-                new Edge(5,6),
-            });
-        var a = graph.TopologicalDecompose();
-        a.Print();
+        var graph = ReadGraphFromFile("input.txt");
+        graph.Print();
+        var decomposedGraph = graph.TopologicalDecompose();
+        decomposedGraph.Print();
     }
 
     private static Graph ReadGraphFromFile(string path)
     {
-        
+        var lines = File.ReadAllLines(path);
+        var verticles = new int[lines.Length];
+        List<Edge> edges = new List<Edge>();
+        for (int i = 0; i < verticles.Length; i++)
+        {
+            verticles[i] = i + 1;
+            var line = lines[i].ToCharArray();
+            for (int j = 0; j < line.Length; j++)
+            {
+                if (line[j] == '1')
+                    edges.Add(new Edge(i + 1, j + 1));
+            }
+        }
+
+
+        return new Graph(verticles, edges);
     }
 }
 
@@ -155,6 +160,7 @@ internal class Graph
                 }
             }
         }
+        res.Add(v);
         return res;
     }
 }
