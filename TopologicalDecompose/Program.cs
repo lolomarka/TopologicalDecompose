@@ -1,166 +1,407 @@
 ﻿using System.Collections.Immutable;
 using System.IO;
+using System.Xml.Linq;
 
 internal class Program
 {
     private static void Main(string[] args)
     {
-        var graph = ReadGraphFromFile("input.txt");
-        graph.Print();
-        var decomposedGraph = graph.TopologicalDecompose();
-        decomposedGraph.Print();
+        var matrix = ReadMatrixFromFile("input.txt");
+        Graph graph = new Graph(matrix);
+
+        graph.PrintAllMatrixes();
+
+        graph.PrintReachabilityMatrix();
+        graph.PrintVertexOrders();
+        graph.PrintTakt();
+        graph.PrintContourExist();
+        graph.PrintInputVertices();
+        graph.PrintOutputVertices();
+        graph.PrintHangingVertices();
+        graph.PrintWaysNumberByLength(3);
+        graph.PrintAllWaysCount();
+        graph.PrintIncludeElements(8);
+        graph.PrintExcludeElements(5);
     }
 
-    private static Graph ReadGraphFromFile(string path)
+
+
+    private static int[][] ReadMatrixFromFile(string path)
     {
         var lines = File.ReadAllLines(path);
-        var verticles = new int[lines.Length];
-        List<Edge> edges = new List<Edge>();
-        for (int i = 0; i < verticles.Length; i++)
+        var result = new int[lines.Length][];
+        for (int i = 0; i < result.Length; i++)
         {
-            verticles[i] = i + 1;
             var line = lines[i].ToCharArray();
+            result[i] = new int[line.Length];
             for (int j = 0; j < line.Length; j++)
             {
-                if (line[j] == '1')
-                    edges.Add(new Edge(i + 1, j + 1));
+                result[i][j] = -'0' + line[j];
             }
         }
 
-
-        return new Graph(verticles, edges);
+        return result;
     }
 }
-
-internal struct Edge
-{
-    public Edge(int outV, int inV)
-    {
-        this.outV = outV;
-        this.inV = inV;
-    }
-
-    public int outV { get; init; }
-    public int inV { get; init; }
-}
-
 
 internal class Graph
 {
-    public void Print()
+    private List<int[][]> _Matrixes;
+    private Dictionary<int, int> _VertexOrders;
+    private int[][] _ReachabilityMatrix;
+    private List<int> _InputVertices;
+    private List<int> _OutputVertices;
+    private List<int> _HangingVertices;
+
+    public Graph(int[][] matrix)
     {
-        foreach (var vert in Verticles)
-        {
-            var outSeq = Edges.Where(e => e.outV == vert).Select(e => e.inV);
-            Console.WriteLine($"G({vert}) = {(outSeq.Any() ? string.Join(", ", outSeq) : 0)}");
-        }
-        Console.ReadLine();
+        _Matrixes = new List<int[][]>();
+        _Matrixes.Add(matrix);
+
+        Exp();
+        CalculateSigma();
     }
 
-    private class Subgraph
+    public List<int[][]> Matrixes { get => _Matrixes; }
+    public Dictionary<int, int> VertexOrders
     {
-        public int Index => Verticles.First();
-
-        public IEnumerable<int> Verticles { get; init; }
-
-        public Subgraph(IEnumerable<int> verticles)
+        get
         {
-            Verticles = verticles;
-        }
-    }
-    public Graph(IEnumerable<int> verticles, IEnumerable<Edge> edges)
-    {
-        Verticles = verticles.ToImmutableSortedSet();
-        Edges = edges;
-    }
-
-    public IEnumerable<Edge> Edges { get; private set; }
-
-    public IEnumerable<int> Verticles { get; private set; }
-
-    public Graph TopologicalDecompose()
-    {
-        var Subgraphes = new List<Subgraph>();
-
-        var availableVerticles = Verticles;
-
-        Subgraph currentSubgraph;
-
-        while (availableVerticles.Any())
-        {
-            var verticle = availableVerticles.First();
-            var R = GetR(verticle);
-            var Q = GetQ(verticle);
-            currentSubgraph = new Subgraph(R.Intersect(Q));
-            if (!currentSubgraph.Verticles.Any())
+            if (_VertexOrders == null)
             {
-                var lastSubgraph = new Subgraph(availableVerticles);
-                Subgraphes.Add(lastSubgraph);
-                break;
+                _VertexOrders = new Dictionary<int, int>();
+                CalculateVertexOrders();
             }
-            Subgraphes.Add(currentSubgraph);
-            availableVerticles = availableVerticles.Except(currentSubgraph.Verticles);
+            return _VertexOrders;
         }
+    }
 
-        List<Edge> newEdges = new List<Edge>();
-        foreach (var subgraph in Subgraphes)
+
+    private bool IsZeroMatrix(int[][] matrix)
+    {
+        for (int i = 0; i < matrix.Length; i++)
         {
-            var outEdges = Edges.Where(e => subgraph.Verticles.Contains(e.outV) && !subgraph.Verticles.Contains(e.inV));
-            var otherSubgraphs = Subgraphes.Except(new Subgraph[] { subgraph });
-            foreach (var edge in outEdges)
+            for (int j = 0; j < matrix[i].Length; j++)
             {
-                var inIndex = otherSubgraphs.FirstOrDefault(s => s.Verticles.Contains(edge.inV))?.Index;
-                if (inIndex.HasValue)
+                if (matrix[i][j] != 0) { return false; }
+            }
+        }
+        return true;
+    }
+
+    private int[] SumArrays(int[] arr1, int[] arr2)
+    {
+        int[] arr3 = new int[arr1.Length];
+        for (int i = 0; i < arr1.Length; i++)
+        {
+            arr3[i] = arr1[i] + arr2[i];
+        }
+        return arr3;
+    }
+
+    private void CalculateReachabilityMatrix()
+    {
+        _ReachabilityMatrix = new int[Matrixes[0].Length][];
+        for (int i = 0; i < ReachabilityMatrix.Length; i++)
+        {
+            ReachabilityMatrix[i] = new int[Matrixes[0][0].Length];
+            foreach (var matrix in Matrixes)
+            {
+                ReachabilityMatrix[i] = SumArrays(ReachabilityMatrix[i], matrix[i]);
+            }
+        }
+    }
+
+    public void Exp()
+    {
+        int k = 0;
+        int[][] startMatrix = Matrixes[k];
+
+        while (!IsZeroMatrix(Matrixes[k]))
+        {
+            int[][] newMatrix = new int[startMatrix.Length][];
+            for (int i = 0; i < startMatrix.Length; i++)
+            {
+                newMatrix[i] = new int[startMatrix[0].Length];
+                for (int j = 0; j < startMatrix[i].Length; j++)
                 {
-                    var newEdge = new Edge(subgraph.Index, inIndex.Value);
-                    if (!newEdges.Contains(newEdge))
+                    if (startMatrix[i][j] != 0)
                     {
-                        newEdges.Add(newEdge);
+                        newMatrix[i] = SumArrays(newMatrix[i], Matrixes[k][j]);
                     }
                 }
             }
+            Matrixes.Add(newMatrix);
+            k++;
         }
-
-        return new Graph(Subgraphes.Select(s => s.Index), newEdges);
     }
 
-    private IEnumerable<int> GetR(int v)
+    private void CalculateSigma()
     {
-        var res = new List<int>() { v };
-
-        IEnumerable<int> achievable;
-        for (int i = 0; i < res.Count; i++)
+        foreach (var matrix in Matrixes)
         {
-            List<int> alreadyAdded = new List<int>();
-            do
+            for (int i = 0; i < matrix.Length - 1; i++)
             {
-                achievable = Edges.Where(edge => edge.outV == res[i]).Select(edge => edge.inV).Except(alreadyAdded).ToArray();
-                res = res.Union(achievable).ToList();
-                alreadyAdded.AddRange(achievable);
-            } while (achievable.Any());
-        }
-
-        return res.Distinct();
-    }
-
-    private IEnumerable<int> GetQ(int v)
-    {
-        Stack<int> stack = new Stack<int>();
-        List<int> res = new List<int>();
-        stack.Push(v);
-        
-        while (stack.TryPop(out int vert)) 
-        {
-            foreach (var outVert in Edges.Where(e => e.inV == vert).Select(e => e.outV).Except(res))
-            {
-                if (!stack.Contains(outVert))
+                for (int j = 0; j < matrix[0].Length - 1; j++)
                 {
-                    stack.Push(outVert);
-                    res.Add(outVert);
+                    matrix[i][matrix[i].Length - 1] += matrix[i][j];
+                    matrix[matrix.Length - 1][j] += matrix[i][j];
                 }
             }
         }
-        res.Add(v);
-        return res;
+    }
+
+    private void CalculateVertexOrders()
+    {
+        int[] arr = Matrixes[0][Matrixes[0].Length - 1];
+
+        for (int j = 0; j < arr.Length - 1; j++)
+        {
+            if (arr[j] == 0)
+            {
+                VertexOrders.Add(j + 1, 0);
+            }
+        }
+        for (int i = 0; i < Matrixes.Count - 1; i++)
+        {
+            int[] arr1 = Matrixes[i][Matrixes[0].Length - 1];
+            int[] arr2 = Matrixes[i + 1][Matrixes[0].Length - 1];
+            for (int j = 0; j < arr1.Length - 1; j++)
+            {
+                if (arr1[j] > 0 && arr2[j] == 0)
+                {
+                    VertexOrders.Add(j + 1, i + 1);
+                }
+            }
+        }
+    }
+
+    private bool CheckContur()
+    {
+        foreach (var matrix in Matrixes)
+        {
+            for (int i = 0; i < matrix.Length - 1; i++)
+            {
+                for (int j = 0; j < matrix[0].Length - 1; j++)
+                {
+                    if (matrix[i][j] != 0 && i == j)
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public List<int> InputVerteces
+    {
+        get
+        {
+            if (_InputVertices == null)
+            {
+                _InputVertices = new List<int>();
+                for (int i = 0; i < Matrixes[0].Length - 1; i++)
+                {
+                    if (Matrixes[0][i][Matrixes[0].Length - 1] == 0)
+                    {
+                        _InputVertices.Add(i + 1);
+                    }
+                }
+            }
+            return _InputVertices;
+        }
+    }
+
+    public List<int> HangingVertices
+    {
+        get
+        {
+            if (_HangingVertices == null)
+            {
+                _HangingVertices = new List<int>();
+                for (int i = 0; i < Matrixes[0].Length - 1; i++)
+                {
+                    if (Matrixes[0][i][Matrixes[0].Length - 1] == Matrixes[0][Matrixes[0].Length - 1][i]
+                        && Matrixes[0][Matrixes[0].Length - 1][i] == 0)
+                    {
+                        _HangingVertices.Add(i + 1);
+                    }
+                }
+            }
+            return _HangingVertices;
+        }
+    }
+
+    public int[][] ReachabilityMatrix
+    {
+        get
+        {
+            if (_ReachabilityMatrix == null)
+            {
+                CalculateReachabilityMatrix();
+            }
+
+            return _ReachabilityMatrix;
+        }
+    }
+
+    public List<int> OutputVertices
+    {
+        get
+        {
+            if (_OutputVertices == null)
+            {
+                _OutputVertices = new List<int>();
+                for (int i = 0; i < Matrixes[0].Length - 1; i++)
+                {
+                    if (Matrixes[0][i][Matrixes[0].Length - 1] == 0)
+                    {
+                        _OutputVertices.Add(i + 1);
+                    }
+                }
+            }
+            return _OutputVertices;
+        }
+    }
+
+    public void PrintWaysNumberByLength(int l)
+    {
+        Console.WriteLine($"Число путей длинной {l}");
+        for (int i = 0; i < Matrixes[0].Length - 1; i++)
+        {
+            for (int j = 0; j < Matrixes[0][0].Length - 1; j++)
+            {
+                if (Matrixes[l - 1][i][j] != 0)
+                {
+                    Console.WriteLine($"{i + 1} -> {j + 1} = {Matrixes[l - 1][i][j]}");
+                }
+            }
+        }
+    }
+
+    private void PrintMatrix(int[][] matrix)
+    {
+        for (int i = 0; i < matrix.Length; i++)
+        {
+            Console.WriteLine(string.Join(" ", matrix[i]));
+        }
+    }
+
+    public void PrintAllWaysCount()
+    {
+        Console.WriteLine("Количество всевозможных путей");
+        for (int i = 0; i < ReachabilityMatrix.Length - 1; i++)
+        {
+            for (int j = 0; j < ReachabilityMatrix[0].Length - 1; j++)
+                if (ReachabilityMatrix[i][j] != 0)
+                {
+                    Console.WriteLine($"{i + 1} -> {j + 1} = {ReachabilityMatrix[i][j]}");
+                }
+        }
+    }
+
+    public Dictionary<int, int> GetIncludeElements(int x)
+    {
+        var result = new Dictionary<int, int>();
+
+        for (int i = 0; i < ReachabilityMatrix.Length - 1; i++)
+        {
+            if (ReachabilityMatrix[i][x - 1] != 0)
+            {
+                result.Add(i + 1, ReachabilityMatrix[i][x - 1]);
+            }
+        }
+        return result;
+    }
+
+    public Dictionary<int, int> GetExcludeElements(int x)
+    {
+        var result = new Dictionary<int, int>();
+        for (int i = 0; i < ReachabilityMatrix.Length - 1; i++)
+        {
+            if (ReachabilityMatrix[x - 1][i] != 0)
+            {
+                result.Add(i + 1, ReachabilityMatrix[x - 1][i]);
+            }
+        }
+        return result;
+    }
+
+    public void PrintAllMatrixes()
+    {
+        int i = 1;
+
+        foreach (var matrix in Matrixes)
+        {
+            Console.WriteLine($"A({i++}) = ");
+            PrintMatrix(matrix);
+            Console.WriteLine();
+        }
+    }
+
+    public void PrintReachabilityMatrix()
+    {
+        Console.WriteLine("Матрица достижимости");
+        PrintMatrix(ReachabilityMatrix);
+    }
+
+    public void PrintVertexOrders()
+    {
+        Console.WriteLine("Порядки элементов");
+        foreach (var item in VertexOrders)
+        {
+            Console.WriteLine($"{item.Key} : {item.Value}");
+        }
+    }
+
+    public void PrintTakt()
+    {
+        Console.WriteLine("Тактность системы");
+        Console.WriteLine(VertexOrders.Values.Max());
+    }
+
+    public void PrintContourExist()
+    {
+        Console.WriteLine("Наличие контура");
+        Console.WriteLine(CheckContur() ? "Да" : "Нет");
+    }
+
+    public void PrintInputVertices()
+    {
+        Console.WriteLine("Входные элементы");
+        Console.WriteLine(string.Join(", ", InputVerteces));
+    }
+
+    public void PrintOutputVertices()
+    {
+        Console.WriteLine("Выходные элементы");
+        Console.WriteLine(string.Join(", ", OutputVertices));
+    }
+
+    public void PrintHangingVertices()
+    {
+        Console.WriteLine("Висящие элементы");
+        Console.WriteLine(string.Join(", ", HangingVertices));
+    }
+
+    public void PrintIncludeElements(int x)
+    {
+        Console.WriteLine($"Элементы, участвующие в формирование X{x} (элемент = сколько раз)");
+        var elements = GetIncludeElements(x);
+        foreach (var item in elements)
+        {
+            Console.WriteLine($"{item.Key} = {item.Value}");
+        }
+    }
+
+    public void PrintExcludeElements(int x2)
+    {
+        Console.WriteLine($"Элементы, в формировании которых участвует X{x2} (элемент = сколько раз)");
+        var elements = GetExcludeElements(x2);
+
+        foreach (var item in elements)
+        {
+            Console.WriteLine($"{item.Key} = {item.Value}");
+        }
     }
 }
+
